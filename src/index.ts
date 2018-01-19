@@ -1,8 +1,10 @@
 import * as path from "path";
 import * as fse from "fs-extra";
 import * as ts from "typescript";
-import * as path from "path";
 import * as fs from "fs";
+import * as util from "util";
+
+const readFile = util.promisify(fs.readFile);
 
 export interface TypeScriptBuild {
   type: "typescript";
@@ -15,7 +17,7 @@ export interface IsotropyHost {
   fs: typeof fs;
 }
 
-class CompilerHost extends ts.CompilerHost {
+export class CompilerHost implements ts.CompilerHost {
   options: ts.CompilerOptions;
   moduleSearchLocations: string[];
   isotropyHost: IsotropyHost;
@@ -25,7 +27,6 @@ class CompilerHost extends ts.CompilerHost {
     moduleSearchLocations: string[],
     isotropyHost: IsotropyHost
   ) {
-    super();
     this.isotropyHost = isotropyHost;
   }
 
@@ -108,18 +109,21 @@ function compile(sourceFiles: string[], moduleSearchLocations: string[]): void {
     module: ts.ModuleKind.AMD,
     target: ts.ScriptTarget.ES5
   };
-  const host = new CompilerHost(options, moduleSearchLocations)();
-  const program = ts.createProgram(sourceFiles, options, host);
+  
 
   /// do something with program...
 }
 
+async function parseConfig(appPath: string) {
+  const configPath = path.join(appPath, "tsconfig.json");
+  const configText = (await readFile(configPath)).toString();
+  const { config } = ts.parseConfigFileTextToJson(configPath, configText);
+}
+
 export default async function run(
-  source: string,
-  root: string,
-  module: TypeScriptBuild
+  projectPath: string,
+  fsModule: typeof fs
 ) {
-  const dest = path.join(root, module.dest);
-  await fse.mkdirp(dest);
-  await fse.copy(source, dest);
+  const host = new CompilerHost(options, moduleSearchLocations)();
+  const program = ts.createProgram(sourceFiles, options, host);
 }
