@@ -1,9 +1,17 @@
 import "mocha";
 import "should";
+import * as fs from "fs";
+import * as ts from "typescript";
+import run, { IsotropyHost } from "../index";
+
+const isotropyHost: IsotropyHost = {
+  newLine: ts.sys.newLine,
+  fs
+};
 
 describe("isotropy-build-typescript", async () => {
   it("Compiles with TypeScript", async () => {
-    const options = parseConfig("./test/fixtures/basic");
-    const compilerHost = new Compiler
+    const result = await run("./dist/test/fixtures/basic", isotropyHost);
+    console.log(result);
   });
 });

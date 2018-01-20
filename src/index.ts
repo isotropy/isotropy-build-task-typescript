@@ -81,13 +81,19 @@ export class CompilerHost implements ts.CompilerHost {
     moduleNames: string[],
     containingFile: string
   ): ts.ResolvedModule[] {
+    debugger;
     const resolvedModules: ts.ResolvedModule[] = [];
     for (const moduleName of moduleNames) {
       // try to use standard resolution
-      let result = ts.resolveModuleName(moduleName, containingFile, this.options, {
-        fileExists: this.fileExists,
-        readFile: this.readFile
-      });
+      let result = ts.resolveModuleName(
+        moduleName,
+        containingFile,
+        this.options,
+        {
+          fileExists: this.fileExists,
+          readFile: this.readFile
+        }
+      );
       if (result.resolvedModule) {
         resolvedModules.push(result.resolvedModule);
       } else {
@@ -104,26 +110,33 @@ export class CompilerHost implements ts.CompilerHost {
   }
 }
 
-function compile(sourceFiles: string[], moduleSearchLocations: string[]): void {
-  const options: ts.CompilerOptions = {
-    module: ts.ModuleKind.AMD,
-    target: ts.ScriptTarget.ES5
-  };
-  
-
-  /// do something with program...
-}
-
-async function parseConfig(appPath: string) {
-  const configPath = path.join(appPath, "tsconfig.json");
+async function getCompilerOptions(projectDir: string) {
+  const configPath = path.join(projectDir, "tsconfig.json");
   const configText = (await readFile(configPath)).toString();
-  const { config } = ts.parseConfigFileTextToJson(configPath, configText);
+  const { config, error } = ts.parseConfigFileTextToJson(
+    "tsconfig.json",
+    configText
+  );
+  const basePath: string = process.cwd();
+  const settings = ts.convertCompilerOptionsFromJson(
+    config.compilerOptions,
+    basePath
+  );
+  return settings.options;
 }
 
 export default async function run(
-  projectPath: string,
-  fsModule: typeof fs
+  projectDir: string,
+  isotropyHost: IsotropyHost
 ) {
-  const host = new CompilerHost(options, moduleSearchLocations)();
-  const program = ts.createProgram(sourceFiles, options, host);
+  const compilerOptions = await getCompilerOptions(projectDir);
+  const filenames: string[] = ["./dist/test/fixtures/basic/src/index.ts"];
+  const program = ts.createProgram(filenames, compilerOptions);
+  let emitResult = program.emit();
+
+  return {
+    type: "typescript",
+    emitResult,
+    preEmitDiagnostics: ts.getPreEmitDiagnostics(program)
+  };
 }
