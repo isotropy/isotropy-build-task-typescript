@@ -1,8 +1,7 @@
 import * as path from "path";
-import * as fse from "fs-extra";
 import * as ts from "typescript";
-import * as fs from "fs";
 import * as util from "util";
+import * as fs from "fs";
 
 const readFile = util.promisify(fs.readFile);
 
@@ -35,7 +34,7 @@ export class CompilerHost implements ts.CompilerHost {
   }
 
   writeFile(fileName: string, content: string) {
-    return ts.sys.writeFile(fileName, content);
+    this.isotropyHost.fs.writeFileSync(fileName, content);
   }
 
   getCurrentDirectory() {
@@ -59,11 +58,11 @@ export class CompilerHost implements ts.CompilerHost {
   }
 
   fileExists(fileName: string): boolean {
-    return ts.sys.fileExists(fileName);
+    return this.isotropyHost.fs.existsSync(fileName);
   }
 
   readFile(fileName: string): string | undefined {
-    return ts.sys.readFile(fileName);
+    return this.isotropyHost.fs.readFileSync(fileName).toString();
   }
 
   getSourceFile(
@@ -81,7 +80,6 @@ export class CompilerHost implements ts.CompilerHost {
     moduleNames: string[],
     containingFile: string
   ): ts.ResolvedModule[] {
-    debugger;
     const resolvedModules: ts.ResolvedModule[] = [];
     for (const moduleName of moduleNames) {
       // try to use standard resolution
@@ -117,20 +115,20 @@ async function getCompilerOptions(projectDir: string) {
     "tsconfig.json",
     configText
   );
-  const basePath: string = process.cwd();
   const settings = ts.convertCompilerOptionsFromJson(
     config.compilerOptions,
-    basePath
+    projectDir
   );
   return settings.options;
 }
 
 export default async function run(
   projectDir: string,
+  files: string[],
   isotropyHost: IsotropyHost
 ) {
   const compilerOptions = await getCompilerOptions(projectDir);
-  const filenames: string[] = ["./dist/test/fixtures/basic/src/index.ts"];
+  const filenames: string[] = files;
   const program = ts.createProgram(filenames, compilerOptions);
   let emitResult = program.emit();
 

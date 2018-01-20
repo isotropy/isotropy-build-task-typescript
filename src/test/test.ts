@@ -11,7 +11,7 @@ const isotropyHost: IsotropyHost = {
 
 describe("isotropy-build-typescript", async () => {
   it("Compiles with TypeScript", async () => {
-    const result = await run("./dist/test/fixtures/basic", isotropyHost);
-    console.log(result);
+    const result = await run("./dist/test/fixtures/basic", ["./dist/test/fixtures/basic/src/index.ts"], isotropyHost);
+    result.emitResult.emitSkipped.should.be.false();
   });
 });
