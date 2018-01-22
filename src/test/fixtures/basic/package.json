@@ -1,0 +1,16 @@
+{
+  "name": "isotropy-build-typescript-fixtures-basic",
+  "private": true,
+  "version": "0.0.1",
+  "author": "Isotropy Team<isotropy@agilehead.com>",
+  "contributors": [
+    "Jeswin Kumar<jeswinpk@agilehead.com>"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+  },
+  "devDependencies": {
+    "@types/node": "^8.0.57"
+  }
+}

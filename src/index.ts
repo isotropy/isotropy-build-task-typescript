@@ -18,14 +18,19 @@ export interface IsotropyHost {
 
 export class CompilerHost implements ts.CompilerHost {
   options: ts.CompilerOptions;
+  projectDir: string;
   moduleSearchLocations: string[];
   isotropyHost: IsotropyHost;
 
   constructor(
     options: ts.CompilerOptions,
+    projectDir: string,
     moduleSearchLocations: string[],
     isotropyHost: IsotropyHost
   ) {
+    this.options = options;
+    this.projectDir = projectDir;
+    this.moduleSearchLocations = moduleSearchLocations;
     this.isotropyHost = isotropyHost;
   }
 
@@ -34,10 +39,14 @@ export class CompilerHost implements ts.CompilerHost {
   }
 
   writeFile(fileName: string, content: string) {
-    this.isotropyHost.fs.writeFileSync(fileName, content);
+    this.isotropyHost.fs.writeFileSync(
+      path.join(this.projectDir, fileName),
+      content
+    );
   }
 
   getCurrentDirectory() {
+    //return this.projectDir;
     return ts.sys.getCurrentDirectory();
   }
 
@@ -62,7 +71,9 @@ export class CompilerHost implements ts.CompilerHost {
   }
 
   readFile(fileName: string): string | undefined {
-    return this.isotropyHost.fs.readFileSync(fileName).toString();
+    return this.isotropyHost.fs
+      .readFileSync(fileName)
+      .toString();
   }
 
   getSourceFile(
@@ -70,9 +81,24 @@ export class CompilerHost implements ts.CompilerHost {
     languageVersion: ts.ScriptTarget,
     onError?: (message: string) => void
   ) {
-    const sourceText = ts.sys.readFile(fileName);
+    const sourceText = this.isotropyHost.fs.readFileSync(fileName).toString();
     return sourceText !== undefined
       ? ts.createSourceFile(fileName, sourceText, languageVersion)
+      : undefined;
+  }
+
+  getSourceFileByPath(
+    fileName: string,
+    _path: string,
+    languageVersion: ts.ScriptTarget,
+    onError?: (message: string) => void
+  ) {
+    debugger;
+    //throw "TODO";
+    const filePath = path.join(this.projectDir, fileName);
+    const sourceText = this.isotropyHost.fs.readFileSync(filePath).toString();
+    return sourceText !== undefined
+      ? ts.createSourceFile(filePath, sourceText, languageVersion)
       : undefined;
   }
 
@@ -88,8 +114,8 @@ export class CompilerHost implements ts.CompilerHost {
         containingFile,
         this.options,
         {
-          fileExists: this.fileExists,
-          readFile: this.readFile
+          fileExists: this.fileExists.bind(this),
+          readFile: this.readFile.bind(this)
         }
       );
       if (result.resolvedModule) {
@@ -97,10 +123,24 @@ export class CompilerHost implements ts.CompilerHost {
       } else {
         // check fallback locations, for simplicity assume that module at location should be represented by '.d.ts' file
         for (const location of this.moduleSearchLocations) {
-          const modulePath = path.join(location, moduleName + ".d.ts");
-          if (this.fileExists(modulePath)) {
-            resolvedModules.push({ resolvedFileName: modulePath });
+          const modulePaths = [
+            path.join(location, moduleName, "index.d.ts"),
+            path.join(location, moduleName + ".d.ts")
+          ];
+          for (const p in modulePaths) {
+            if (this.fileExists(p)) {
+              resolvedModules.push({ resolvedFileName: p });
+              break;
+            }
           }
+          // resolvedModules.push({
+          //   resolvedFileName: path.join(
+          //     location,
+          //     "node_modules",
+          //     "@types",
+          //     "node"
+          //   )
+          // });
         }
       }
     }
@@ -119,17 +159,26 @@ async function getCompilerOptions(projectDir: string) {
     config.compilerOptions,
     projectDir
   );
-  return settings.options;
+  return { ...settings.options, configFilePath: configPath };
 }
 
 export default async function run(
-  projectDir: string,
   files: string[],
+  projectDir: string,
+  moduleSearchLocations: string[],
   isotropyHost: IsotropyHost
 ) {
   const compilerOptions = await getCompilerOptions(projectDir);
-  const filenames: string[] = files;
-  const program = ts.createProgram(filenames, compilerOptions);
+  const program = ts.createProgram(
+    files,
+    compilerOptions,
+    new CompilerHost(
+      compilerOptions,
+      projectDir,
+      moduleSearchLocations,
+      isotropyHost
+    )
+  );
   let emitResult = program.emit();
 
   return {
