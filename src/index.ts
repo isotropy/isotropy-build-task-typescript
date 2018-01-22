@@ -81,10 +81,12 @@ export class CompilerHost implements ts.CompilerHost {
     languageVersion: ts.ScriptTarget,
     onError?: (message: string) => void
   ) {
-    const sourceText = this.isotropyHost.fs.readFileSync(fileName).toString();
-    return sourceText !== undefined
-      ? ts.createSourceFile(fileName, sourceText, languageVersion)
-      : undefined;
+    if (this.isotropyHost.fs.existsSync(fileName)) {
+      const sourceText = this.isotropyHost.fs.readFileSync(fileName).toString();
+      return sourceText !== undefined
+        ? ts.createSourceFile(fileName, sourceText, languageVersion)
+        : undefined;
+    }
   }
 
   getSourceFileByPath(
@@ -93,8 +95,6 @@ export class CompilerHost implements ts.CompilerHost {
     languageVersion: ts.ScriptTarget,
     onError?: (message: string) => void
   ) {
-    debugger;
-    //throw "TODO";
     const filePath = path.join(this.projectDir, fileName);
     const sourceText = this.isotropyHost.fs.readFileSync(filePath).toString();
     return sourceText !== undefined
@@ -102,50 +102,45 @@ export class CompilerHost implements ts.CompilerHost {
       : undefined;
   }
 
-  resolveModuleNames(
-    moduleNames: string[],
-    containingFile: string
-  ): ts.ResolvedModule[] {
-    const resolvedModules: ts.ResolvedModule[] = [];
-    for (const moduleName of moduleNames) {
-      // try to use standard resolution
-      let result = ts.resolveModuleName(
-        moduleName,
-        containingFile,
-        this.options,
-        {
-          fileExists: this.fileExists.bind(this),
-          readFile: this.readFile.bind(this)
-        }
-      );
-      if (result.resolvedModule) {
-        resolvedModules.push(result.resolvedModule);
-      } else {
-        // check fallback locations, for simplicity assume that module at location should be represented by '.d.ts' file
-        for (const location of this.moduleSearchLocations) {
-          const modulePaths = [
-            path.join(location, moduleName, "index.d.ts"),
-            path.join(location, moduleName + ".d.ts")
-          ];
-          for (const p in modulePaths) {
-            if (this.fileExists(p)) {
-              resolvedModules.push({ resolvedFileName: p });
-              break;
-            }
-          }
-          // resolvedModules.push({
-          //   resolvedFileName: path.join(
-          //     location,
-          //     "node_modules",
-          //     "@types",
-          //     "node"
-          //   )
-          // });
-        }
-      }
-    }
-    return resolvedModules;
-  }
+  // resolveModuleNames(
+  //   moduleNames: string[],
+  //   containingFile: string
+  // ): ts.ResolvedModule[] {
+  //   const self=this
+  //   const resolvedModules: ts.ResolvedModule[] = [];
+  //   for (const moduleName of moduleNames) {
+  //     // try to use standard resolution
+  //     const moduleResolutionCache = ts.createModuleResolutionCache(this.getCurrentDirectory(), x => self.getCanonicalFileName(x));
+  //     let result = ts.resolveModuleName(
+  //       moduleName,
+  //       containingFile,
+  //       this.options,
+  //       {
+  //         fileExists: this.fileExists.bind(this),
+  //         readFile: this.readFile.bind(this)
+  //       },
+  //       moduleResolutionCache
+  //     );
+  //     if (result.resolvedModule) {
+  //       resolvedModules.push(result.resolvedModule);
+  //     } else {
+  //       // check fallback locations, for simplicity assume that module at location should be represented by '.d.ts' file
+  //       for (const location of this.moduleSearchLocations) {
+  //         const modulePaths = [
+  //           path.join(location, moduleName, "index.d.ts"),
+  //           path.join(location, moduleName + ".d.ts")
+  //         ];
+  //         for (const p in modulePaths) {
+  //           if (this.fileExists(p)) {
+  //             resolvedModules.push({ resolvedFileName: p });
+  //             break;
+  //           }
+  //         }
+  //       }
+  //     }
+  //   }
+  //   return resolvedModules;
+  // }
 }
 
 async function getCompilerOptions(projectDir: string) {
