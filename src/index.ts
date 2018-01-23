@@ -1,9 +1,8 @@
 import * as path from "path";
 import * as ts from "typescript";
 import * as util from "util";
-import * as fs from "fs";
-
-const readFile = util.promisify(fs.readFile);
+import fse = require("fs-extra");
+import { mkdirpSync } from "fs-extra";
 
 export interface TypeScriptBuild {
   type: "typescript";
@@ -13,7 +12,7 @@ export interface TypeScriptBuild {
 
 export interface IsotropyHost {
   newLine: typeof ts.sys.newLine;
-  fs: typeof fs;
+  fse: typeof fse;
 }
 
 export class CompilerHost implements ts.CompilerHost {
@@ -39,10 +38,9 @@ export class CompilerHost implements ts.CompilerHost {
   }
 
   writeFile(fileName: string, content: string) {
-    this.isotropyHost.fs.writeFileSync(
-      path.join(this.projectDir, fileName),
-      content
-    );
+    const dir = path.dirname(fileName);
+    this.isotropyHost.fse.mkdirpSync(dir);
+    this.isotropyHost.fse.writeFileSync(fileName, content);
   }
 
   getCurrentDirectory() {
@@ -67,13 +65,11 @@ export class CompilerHost implements ts.CompilerHost {
   }
 
   fileExists(fileName: string): boolean {
-    return this.isotropyHost.fs.existsSync(fileName);
+    return this.isotropyHost.fse.existsSync(fileName);
   }
 
   readFile(fileName: string): string | undefined {
-    return this.isotropyHost.fs
-      .readFileSync(fileName)
-      .toString();
+    return this.isotropyHost.fse.readFileSync(fileName).toString();
   }
 
   getSourceFile(
@@ -81,8 +77,10 @@ export class CompilerHost implements ts.CompilerHost {
     languageVersion: ts.ScriptTarget,
     onError?: (message: string) => void
   ) {
-    if (this.isotropyHost.fs.existsSync(fileName)) {
-      const sourceText = this.isotropyHost.fs.readFileSync(fileName).toString();
+    if (this.isotropyHost.fse.existsSync(fileName)) {
+      const sourceText = this.isotropyHost.fse
+        .readFileSync(fileName)
+        .toString();
       return sourceText !== undefined
         ? ts.createSourceFile(fileName, sourceText, languageVersion)
         : undefined;
@@ -96,7 +94,7 @@ export class CompilerHost implements ts.CompilerHost {
     onError?: (message: string) => void
   ) {
     const filePath = path.join(this.projectDir, fileName);
-    const sourceText = this.isotropyHost.fs.readFileSync(filePath).toString();
+    const sourceText = this.isotropyHost.fse.readFileSync(filePath).toString();
     return sourceText !== undefined
       ? ts.createSourceFile(filePath, sourceText, languageVersion)
       : undefined;
@@ -143,9 +141,14 @@ export class CompilerHost implements ts.CompilerHost {
   // }
 }
 
-async function getCompilerOptions(projectDir: string) {
+async function getCompilerOptions(
+  projectDir: string,
+  isotropyHost: IsotropyHost
+) {
   const configPath = path.join(projectDir, "tsconfig.json");
-  const configText = (await readFile(configPath)).toString();
+  const configText = (await isotropyHost.fse.readFileSync(
+    configPath
+  )).toString();
   const { config, error } = ts.parseConfigFileTextToJson(
     "tsconfig.json",
     configText
@@ -163,7 +166,7 @@ export default async function run(
   moduleSearchLocations: string[],
   isotropyHost: IsotropyHost
 ) {
-  const compilerOptions = await getCompilerOptions(projectDir);
+  const compilerOptions = await getCompilerOptions(projectDir, isotropyHost);
   const program = ts.createProgram(
     files,
     compilerOptions,

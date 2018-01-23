@@ -1,12 +1,12 @@
 import "mocha";
 import "should";
-import * as fs from "fs";
+import fse = require("fs-extra");
 import * as ts from "typescript";
 import run, { IsotropyHost } from "../index";
 
 const isotropyHost: IsotropyHost = {
   newLine: ts.sys.newLine,
-  fs
+  fse
 };
 
 describe("isotropy-build-typescript", async () => {
