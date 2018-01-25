@@ -1,6 +1,6 @@
 {
   "name": "isotropy-build-typescript",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "Isotropy Team<isotropy@agilehead.com>",
   "contributors": [
     "Jeswin Kumar<jeswinpk@agilehead.com>"
@@ -12,14 +12,14 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "dependencies": {
-    "typescript": "^2.7.0-rc"
+    "typescript": "^2.7.0-rc",
+    "fs-extra": "^5.0.0",
+    "@types/fs-extra": "^5.0.0",
+    "@types/node": "^8.0.57"
   },
   "devDependencies": {
-    "@types/fs-extra": "^5.0.0",
     "@types/mocha": "^2.2.44",
-    "@types/node": "^8.0.57",
     "@types/should": "^11.2.0",
-    "fs-extra": "^5.0.0",
     "mocha": "*",
     "should": "*"
   }
