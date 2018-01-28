@@ -2,6 +2,7 @@ import * as path from "path";
 import * as ts from "typescript";
 import * as util from "util";
 import fse = require("fs-extra");
+import exception from "./exception";
 import { mkdirpSync } from "fs-extra";
 
 export interface TypeScriptBuildConfig {
@@ -127,15 +128,32 @@ export default async function run(
 ) {
   const files = buildConfig.files
     ? buildConfig.files.map(f => path.join(projectDir, f))
-    : [path.join(projectDir, "src", "index.ts")];
-  
-    const hostOpts = {
+    : (() => {
+        const commonEntryPoints = [
+          "index.ts",
+          "index.tsx",
+          "app.ts",
+          "app.tsx",
+          "main.ts",
+          "main.tsx"
+        ];
+        const match =
+          commonEntryPoints.find(x =>
+            fse.existsSync(path.join(projectDir, "src", x))
+          ) ||
+          exception(
+            `Need an entry file for typescript build. Specify an entry in isotropy.yaml.`
+          );
+        return [path.join(projectDir, "src", match)];
+      })();
+
+  const hostOpts = {
     newLine: isotropyHost.newLine || ts.sys.newLine,
     fse: isotropyHost.fse
   };
-  
+
   const compilerOptions = await getCompilerOptions(projectDir, hostOpts);
-  
+
   const program = ts.createProgram(
     files,
     compilerOptions,
@@ -146,7 +164,7 @@ export default async function run(
       hostOpts
     )
   );
-  
+
   let emitResult = program.emit();
 
   return {
