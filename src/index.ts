@@ -4,10 +4,9 @@ import * as util from "util";
 import fse = require("fs-extra");
 import { mkdirpSync } from "fs-extra";
 
-export interface TypeScriptBuild {
+export interface TypeScriptBuildConfig {
   type: "typescript";
-  bundle: boolean;
-  dest: string;
+  files?: string[];
 }
 
 export interface IsotropyHost {
@@ -99,46 +98,6 @@ export class CompilerHost implements ts.CompilerHost {
       ? ts.createSourceFile(filePath, sourceText, languageVersion)
       : undefined;
   }
-
-  // resolveModuleNames(
-  //   moduleNames: string[],
-  //   containingFile: string
-  // ): ts.ResolvedModule[] {
-  //   const self=this
-  //   const resolvedModules: ts.ResolvedModule[] = [];
-  //   for (const moduleName of moduleNames) {
-  //     // try to use standard resolution
-  //     const moduleResolutionCache = ts.createModuleResolutionCache(this.getCurrentDirectory(), x => self.getCanonicalFileName(x));
-  //     let result = ts.resolveModuleName(
-  //       moduleName,
-  //       containingFile,
-  //       this.options,
-  //       {
-  //         fileExists: this.fileExists.bind(this),
-  //         readFile: this.readFile.bind(this)
-  //       },
-  //       moduleResolutionCache
-  //     );
-  //     if (result.resolvedModule) {
-  //       resolvedModules.push(result.resolvedModule);
-  //     } else {
-  //       // check fallback locations, for simplicity assume that module at location should be represented by '.d.ts' file
-  //       for (const location of this.moduleSearchLocations) {
-  //         const modulePaths = [
-  //           path.join(location, moduleName, "index.d.ts"),
-  //           path.join(location, moduleName + ".d.ts")
-  //         ];
-  //         for (const p in modulePaths) {
-  //           if (this.fileExists(p)) {
-  //             resolvedModules.push({ resolvedFileName: p });
-  //             break;
-  //           }
-  //         }
-  //       }
-  //     }
-  //   }
-  //   return resolvedModules;
-  // }
 }
 
 async function getCompilerOptions(
@@ -161,11 +120,14 @@ async function getCompilerOptions(
 }
 
 export default async function run(
-  files: string[],
   projectDir: string,
+  buildConfig: TypeScriptBuildConfig,
   moduleSearchLocations: string[],
   isotropyHost: IsotropyHost
 ) {
+  const files = buildConfig.files
+    ? buildConfig.files.map(f => path.join(projectDir, f))
+    : [path.join(projectDir, "src", "index.ts")];
   const compilerOptions = await getCompilerOptions(projectDir, isotropyHost);
   const program = ts.createProgram(
     files,
