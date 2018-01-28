@@ -10,7 +10,7 @@ export interface TypeScriptBuildConfig {
 }
 
 export interface IsotropyHost {
-  newLine: typeof ts.sys.newLine;
+  newLine?: typeof ts.sys.newLine;
   fse: typeof fse;
 }
 
@@ -128,7 +128,14 @@ export default async function run(
   const files = buildConfig.files
     ? buildConfig.files.map(f => path.join(projectDir, f))
     : [path.join(projectDir, "src", "index.ts")];
-  const compilerOptions = await getCompilerOptions(projectDir, isotropyHost);
+  
+    const hostOpts = {
+    newLine: isotropyHost.newLine || ts.sys.newLine,
+    fse: isotropyHost.fse
+  };
+  
+  const compilerOptions = await getCompilerOptions(projectDir, hostOpts);
+  
   const program = ts.createProgram(
     files,
     compilerOptions,
@@ -136,13 +143,13 @@ export default async function run(
       compilerOptions,
       projectDir,
       moduleSearchLocations,
-      isotropyHost
+      hostOpts
     )
   );
+  
   let emitResult = program.emit();
 
   return {
-    type: "typescript",
     emitResult,
     preEmitDiagnostics: ts.getPreEmitDiagnostics(program)
   };

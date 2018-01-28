@@ -1,5 +1,5 @@
 import "mocha";
-import "should";
+import should = require("should");
 import fse = require("fs-extra");
 import * as ts from "typescript";
 import * as path from "path";
@@ -25,5 +25,6 @@ describe("isotropy-build-typescript", async () => {
       .existsSync(path.resolve("./dist/test/fixtures/basic/dist/hello.js"))
       .should.be.true();
     result.emitResult.emitSkipped.should.be.false();
+    should.exist(result.preEmitDiagnostics);
   });
 });
