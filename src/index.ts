@@ -123,7 +123,6 @@ async function getCompilerOptions(
 export default async function run(
   projectDir: string,
   buildConfig: TypeScriptBuildConfig,
-  moduleSearchLocations: string[],
   isotropyHost: IsotropyHost
 ) {
   const files = buildConfig.files
@@ -160,7 +159,7 @@ export default async function run(
     new CompilerHost(
       compilerOptions,
       projectDir,
-      moduleSearchLocations,
+      [],
       hostOpts
     )
   );

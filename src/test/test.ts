@@ -15,7 +15,6 @@ describe("isotropy-build-typescript", async () => {
     const result = await run(
       "./dist/test/fixtures/basic",
       { type: "typescript" },
-      [],
       isotropyHost
     );
     fse
