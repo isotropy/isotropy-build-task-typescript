@@ -1,9 +1,9 @@
 import * as path from "path";
 import * as ts from "typescript";
 import * as util from "util";
-import fse = require("fs-extra");
+import fsExtra = require("fs-extra");
 import exception from "./exception";
-import { mkdirpSync } from "fs-extra";
+import { mkdirpSync, readdir } from "fs-extra";
 
 export interface TypeScriptBuildConfig {
   type: "typescript";
@@ -12,10 +12,11 @@ export interface TypeScriptBuildConfig {
 
 export interface IsotropyHost {
   newLine?: typeof ts.sys.newLine;
-  fse: typeof fse;
+  fse: typeof fsExtra;
+  log: (msg: string) => void;
 }
 
-export class CompilerHost implements ts.CompilerHost {
+export class HostBase {
   options: ts.CompilerOptions;
   projectDir: string;
   moduleSearchLocations: string[];
@@ -31,6 +32,43 @@ export class CompilerHost implements ts.CompilerHost {
     this.projectDir = projectDir;
     this.moduleSearchLocations = moduleSearchLocations;
     this.isotropyHost = isotropyHost;
+  }
+}
+
+function recursivelyGetTSFiles(dir: string, fse: typeof fsExtra): string[] {
+  function readDirR(dir: string) : string[] {
+    return fse.statSync(dir).isDirectory()
+      ? Array.prototype.concat(
+          ...fse
+            .readdirSync(dir)
+            .map((f: string) => readDirR(path.join(dir, f)))
+        )
+      : [dir];
+  }
+  const files = readDirR(dir);
+  return files.filter(f => /\.ts$/.test(f));
+}
+
+export class IsotropyLanguageHost extends HostBase
+  implements ts.LanguageServiceHost {
+  constructor(
+    options: ts.CompilerOptions,
+    projectDir: string,
+    moduleSearchLocations: string[],
+    isotropyHost: IsotropyHost
+  ) {
+    super(options, projectDir, moduleSearchLocations, isotropyHost);
+  }
+}
+
+export class IsotropyCompilerHost extends HostBase implements ts.CompilerHost {
+  constructor(
+    options: ts.CompilerOptions,
+    projectDir: string,
+    moduleSearchLocations: string[],
+    isotropyHost: IsotropyHost
+  ) {
+    super(options, projectDir, moduleSearchLocations, isotropyHost);
   }
 
   getDefaultLibFileName() {
@@ -138,7 +176,7 @@ export default async function run(
         ];
         const match =
           commonEntryPoints.find(x =>
-            fse.existsSync(path.join(projectDir, "src", x))
+            fsExtra.existsSync(path.join(projectDir, "src", x))
           ) ||
           exception(
             `Need an entry file for typescript build. Specify an entry in isotropy.yaml.`
@@ -156,12 +194,7 @@ export default async function run(
   const program = ts.createProgram(
     files,
     compilerOptions,
-    new CompilerHost(
-      compilerOptions,
-      projectDir,
-      [],
-      hostOpts
-    )
+    new IsotropyCompilerHost(compilerOptions, projectDir, [], hostOpts)
   );
 
   let emitResult = program.emit();
