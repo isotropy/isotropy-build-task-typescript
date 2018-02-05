@@ -17,7 +17,6 @@ export interface DevOptions {
 export interface IsotropyHost {
   newLine?: typeof ts.sys.newLine;
   fse: typeof fsExtra;
-  log: (msg: string) => void;
 }
 
 export class HostBase {
@@ -80,7 +79,7 @@ export class IsotropyCompilerHost extends HostBase implements ts.CompilerHost {
   }
 
   getDefaultLibFileName() {
-    return "lib.d.ts";
+    return path.join(__dirname, "../node_modules/typescript/lib/lib.d.ts");
   }
 
   writeFile(fileName: string, content: string) {
@@ -195,8 +194,7 @@ export default async function run(
 
   const hostOpts = {
     newLine: isotropyHost.newLine || ts.sys.newLine,
-    fse: isotropyHost.fse,
-    log: isotropyHost.log
+    fse: isotropyHost.fse
   };
 
   const compilerOptions = await getCompilerOptions(projectDir, hostOpts);
@@ -204,13 +202,19 @@ export default async function run(
   const program = ts.createProgram(
     files,
     compilerOptions,
-    new IsotropyCompilerHost(compilerOptions, projectDir, [], devOptions, hostOpts)
+    new IsotropyCompilerHost(
+      compilerOptions,
+      projectDir,
+      [],
+      devOptions,
+      hostOpts
+    )
   );
 
-  let emitResult = program.emit();
+  const emitResult = program.emit();
+  const preEmitDiagnostics = ts.getPreEmitDiagnostics(program);
 
   return {
-    emitResult,
-    preEmitDiagnostics: ts.getPreEmitDiagnostics(program)
+    errors: preEmitDiagnostics
   };
 }
