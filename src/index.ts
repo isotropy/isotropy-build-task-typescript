@@ -10,6 +10,10 @@ export interface TypeScriptBuildConfig {
   files?: string[];
 }
 
+export interface DevOptions {
+  watch?: boolean;
+}
+
 export interface IsotropyHost {
   newLine?: typeof ts.sys.newLine;
   fse: typeof fsExtra;
@@ -21,22 +25,25 @@ export class HostBase {
   projectDir: string;
   moduleSearchLocations: string[];
   isotropyHost: IsotropyHost;
+  devOptions: DevOptions;
 
   constructor(
     options: ts.CompilerOptions,
     projectDir: string,
     moduleSearchLocations: string[],
+    devOptions: DevOptions,
     isotropyHost: IsotropyHost
   ) {
     this.options = options;
     this.projectDir = projectDir;
     this.moduleSearchLocations = moduleSearchLocations;
+    this.devOptions = devOptions;
     this.isotropyHost = isotropyHost;
   }
 }
 
 function recursivelyGetTSFiles(dir: string, fse: typeof fsExtra): string[] {
-  function readDirR(dir: string) : string[] {
+  function readDirR(dir: string): string[] {
     return fse.statSync(dir).isDirectory()
       ? Array.prototype.concat(
           ...fse
@@ -49,26 +56,27 @@ function recursivelyGetTSFiles(dir: string, fse: typeof fsExtra): string[] {
   return files.filter(f => /\.ts$/.test(f));
 }
 
-export class IsotropyLanguageHost extends HostBase
-  implements ts.LanguageServiceHost {
-  constructor(
-    options: ts.CompilerOptions,
-    projectDir: string,
-    moduleSearchLocations: string[],
-    isotropyHost: IsotropyHost
-  ) {
-    super(options, projectDir, moduleSearchLocations, isotropyHost);
-  }
-}
+// export class IsotropyLanguageHost extends HostBase
+//   implements ts.LanguageServiceHost {
+//   constructor(
+//     options: ts.CompilerOptions,
+//     projectDir: string,
+//     moduleSearchLocations: string[],
+//     isotropyHost: IsotropyHost
+//   ) {
+//     super(options, projectDir, moduleSearchLocations, isotropyHost);
+//   }
+// }
 
 export class IsotropyCompilerHost extends HostBase implements ts.CompilerHost {
   constructor(
     options: ts.CompilerOptions,
     projectDir: string,
     moduleSearchLocations: string[],
+    devOptions: DevOptions,
     isotropyHost: IsotropyHost
   ) {
-    super(options, projectDir, moduleSearchLocations, isotropyHost);
+    super(options, projectDir, moduleSearchLocations, devOptions, isotropyHost);
   }
 
   getDefaultLibFileName() {
@@ -161,6 +169,7 @@ async function getCompilerOptions(
 export default async function run(
   projectDir: string,
   buildConfig: TypeScriptBuildConfig,
+  devOptions: DevOptions,
   isotropyHost: IsotropyHost
 ) {
   const files = buildConfig.files
@@ -186,7 +195,8 @@ export default async function run(
 
   const hostOpts = {
     newLine: isotropyHost.newLine || ts.sys.newLine,
-    fse: isotropyHost.fse
+    fse: isotropyHost.fse,
+    log: isotropyHost.log
   };
 
   const compilerOptions = await getCompilerOptions(projectDir, hostOpts);
@@ -194,7 +204,7 @@ export default async function run(
   const program = ts.createProgram(
     files,
     compilerOptions,
-    new IsotropyCompilerHost(compilerOptions, projectDir, [], hostOpts)
+    new IsotropyCompilerHost(compilerOptions, projectDir, [], devOptions, hostOpts)
   );
 
   let emitResult = program.emit();
