@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as ts from "typescript";
+import fsExtra = require("fs-extra");
 import HostBase from "./HostBase";
 
 async function recursivelyGetTSFiles(dir: string, fse: typeof fsExtra): string[] {
