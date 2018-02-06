@@ -1,6 +1,5 @@
 import * as path from "path";
 import * as ts from "typescript";
-import * as util from "util";
 import fsExtra = require("fs-extra");
 import exception from "./exception";
 import { mkdirpSync, readdir } from "fs-extra";
@@ -19,151 +18,133 @@ export interface IsotropyHost {
   fse: typeof fsExtra;
 }
 
-export class HostBase {
-  options: ts.CompilerOptions;
-  projectDir: string;
-  moduleSearchLocations: string[];
-  isotropyHost: IsotropyHost;
-  devOptions: DevOptions;
-
-  constructor(
-    options: ts.CompilerOptions,
-    projectDir: string,
-    moduleSearchLocations: string[],
-    devOptions: DevOptions,
-    isotropyHost: IsotropyHost
-  ) {
-    this.options = options;
-    this.projectDir = projectDir;
-    this.moduleSearchLocations = moduleSearchLocations;
-    this.devOptions = devOptions;
-    this.isotropyHost = isotropyHost;
-  }
-}
-
-function recursivelyGetTSFiles(dir: string, fse: typeof fsExtra): string[] {
-  function readDirR(dir: string): string[] {
+async function recursivelyGetTSFiles(dir: string, fse: typeof fsExtra): string[] {
+  function readDirRecursive(dir: string): string[] {
     return fse.statSync(dir).isDirectory()
       ? Array.prototype.concat(
           ...fse
             .readdirSync(dir)
-            .map((f: string) => readDirR(path.join(dir, f)))
+            .map((f: string) => readDirRecursive(path.join(dir, f)))
         )
       : [dir];
   }
-  const files = readDirR(dir);
+  const files = readDirRecursive(dir);
   return files.filter(f => /\.ts$/.test(f));
 }
 
-// export class IsotropyLanguageHost extends HostBase
-//   implements ts.LanguageServiceHost {
-//   constructor(
-//     options: ts.CompilerOptions,
-//     projectDir: string,
-//     moduleSearchLocations: string[],
-//     isotropyHost: IsotropyHost
-//   ) {
-//     super(options, projectDir, moduleSearchLocations, isotropyHost);
-//   }
-// }
 
-export class IsotropyCompilerHost extends HostBase implements ts.CompilerHost {
-  constructor(
-    options: ts.CompilerOptions,
-    projectDir: string,
-    moduleSearchLocations: string[],
-    devOptions: DevOptions,
-    isotropyHost: IsotropyHost
-  ) {
-    super(options, projectDir, moduleSearchLocations, devOptions, isotropyHost);
-  }
-
-  getDefaultLibFileName() {
-    return path.join(__dirname, "../node_modules/typescript/lib/lib.d.ts");
-  }
-
-  writeFile(fileName: string, content: string) {
-    const dir = path.dirname(fileName);
-    this.isotropyHost.fse.mkdirpSync(dir);
-    this.isotropyHost.fse.writeFileSync(fileName, content);
-  }
-
-  getCurrentDirectory() {
-    //return this.projectDir;
-    return ts.sys.getCurrentDirectory();
-  }
-
-  getDirectories(path: string) {
-    return ts.sys.getDirectories(path);
-  }
-
-  getCanonicalFileName(fileName: string) {
-    return ts.sys.useCaseSensitiveFileNames ? fileName : fileName.toLowerCase();
-  }
-
-  getNewLine() {
-    return ts.sys.newLine;
-  }
-
-  useCaseSensitiveFileNames() {
-    return ts.sys.useCaseSensitiveFileNames;
-  }
-
-  fileExists(fileName: string): boolean {
-    return this.isotropyHost.fse.existsSync(fileName);
-  }
-
-  readFile(fileName: string): string | undefined {
-    return this.isotropyHost.fse.readFileSync(fileName).toString();
-  }
-
-  getSourceFile(
-    fileName: string,
-    languageVersion: ts.ScriptTarget,
-    onError?: (message: string) => void
-  ) {
-    if (this.isotropyHost.fse.existsSync(fileName)) {
-      const sourceText = this.isotropyHost.fse
-        .readFileSync(fileName)
-        .toString();
-      return sourceText !== undefined
-        ? ts.createSourceFile(fileName, sourceText, languageVersion)
-        : undefined;
-    }
-  }
-
-  getSourceFileByPath(
-    fileName: string,
-    _path: string,
-    languageVersion: ts.ScriptTarget,
-    onError?: (message: string) => void
-  ) {
-    const filePath = path.join(this.projectDir, fileName);
-    const sourceText = this.isotropyHost.fse.readFileSync(filePath).toString();
-    return sourceText !== undefined
-      ? ts.createSourceFile(filePath, sourceText, languageVersion)
-      : undefined;
-  }
-}
-
-async function getCompilerOptions(
+function getWatcher(
+  options: ts.CompilerOptions,
   projectDir: string,
+  moduleSearchLocations: string[],
+  devOptions: DevOptions,
   isotropyHost: IsotropyHost
 ) {
-  const configPath = path.join(projectDir, "tsconfig.json");
-  const configText = (await isotropyHost.fse.readFileSync(
-    configPath
-  )).toString();
-  const { config, error } = ts.parseConfigFileTextToJson(
-    "tsconfig.json",
-    configText
-  );
-  const settings = ts.convertCompilerOptionsFromJson(
-    config.compilerOptions,
-    projectDir
-  );
-  return { ...settings.options, configFilePath: configPath };
+  return async () => {
+    const files: ts.MapLike<{ version: number }> = {};
+
+    const rootFileNames = await recursivelyGetTSFiles(projectDir, isotropyHost.fse);
+    
+    // initialize the list of files
+    rootFileNames.forEach(fileName => {
+      files[fileName] = { version: 0 };
+    });
+
+    // Create the language service host to allow the LS to communicate with the host
+    const servicesHost: ts.LanguageServiceHost = {
+      getScriptFileNames: () => rootFileNames,
+      getScriptVersion: fileName =>
+        files[fileName] && files[fileName].version.toString(),
+      getScriptSnapshot: fileName => {
+        if (!isotropyHost.fse.existsSync(fileName)) {
+          return undefined;
+        }
+
+        return ts.ScriptSnapshot.fromString(
+          isotropyHost.fse.readFileSync(fileName).toString()
+        );
+      },
+      getCurrentDirectory: () => process.cwd(),
+      getCompilationSettings: () => options,
+      getDefaultLibFileName: options => ts.getDefaultLibFilePath(options),
+      fileExists: ts.sys.fileExists,
+      readFile: ts.sys.readFile,
+      readDirectory: ts.sys.readDirectory
+    };
+
+    // Create the language service files
+    const services = ts.createLanguageService(
+      servicesHost,
+      ts.createDocumentRegistry()
+    );
+
+    // Now let's watch the files
+    rootFileNames.forEach(fileName => {
+      // First time around, emit all files
+      emitFile(fileName);
+
+      // Add a watch on the file to handle next change
+      fs.watchFile(
+        fileName,
+        { persistent: true, interval: 250 },
+        (curr, prev) => {
+          // Check timestamp
+          if (+curr.mtime <= +prev.mtime) {
+            return;
+          }
+
+          // Update the version to signal a change in the file
+          files[fileName].version++;
+
+          // write the changes to disk
+          emitFile(fileName);
+        }
+      );
+    });
+
+    function emitFile(fileName: string) {
+      let output = services.getEmitOutput(fileName);
+
+      if (!output.emitSkipped) {
+        console.log(`Emitting ${fileName}`);
+      } else {
+        console.log(`Emitting ${fileName} failed`);
+        logErrors(fileName);
+      }
+
+      output.outputFiles.forEach(o => {
+        fs.writeFileSync(o.name, o.text, "utf8");
+      });
+    }
+
+    function logErrors(fileName: string) {
+      let allDiagnostics = services
+        .getCompilerOptionsDiagnostics()
+        .concat(services.getSyntacticDiagnostics(fileName))
+        .concat(services.getSemanticDiagnostics(fileName));
+
+      allDiagnostics.forEach(diagnostic => {
+        let message = ts.flattenDiagnosticMessageText(
+          diagnostic.messageText,
+          "\n"
+        );
+        if (diagnostic.file) {
+          let {
+            line,
+            character
+          } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start!);
+          console.log(
+            `  Error ${diagnostic.file.fileName} (${line + 1},${character +
+              1}): ${message}`
+          );
+        } else {
+          console.log(`  Error: ${message}`);
+        }
+      });
+    }
+  };
 }
+
 
 export default async function run(
   projectDir: string,
@@ -215,6 +196,7 @@ export default async function run(
   const preEmitDiagnostics = ts.getPreEmitDiagnostics(program);
 
   return {
-    errors: preEmitDiagnostics
+    errors: preEmitDiagnostics,
+    watch: getWatcher(compilerOptions, projectDir, [], devOptions, hostOpts)
   };
 }
